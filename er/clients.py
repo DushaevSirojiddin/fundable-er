@@ -39,6 +39,7 @@ class Cache:
             "CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, provider TEXT, request TEXT, response TEXT, ts REAL)")
         self.db.commit()
         self._pending = 0
+        self.touched: set[str] = set()
 
     @staticmethod
     def key(provider: str, request: Any) -> str:
@@ -46,6 +47,7 @@ class Cache:
         return hashlib.sha256(blob.encode()).hexdigest()
 
     def get(self, k: str) -> Any | None:
+        self.touched.add(k)
         row = self.db.execute("SELECT response FROM kv WHERE k=?", (k,)).fetchone()
         return json.loads(row[0]) if row else None
 
@@ -60,6 +62,16 @@ class Cache:
     def flush(self) -> None:
         self.db.commit()
         self._pending = 0
+
+    def prune(self) -> int:
+        """Delete entries this run did not read or write (e.g. from older prompt versions)."""
+        self.flush()
+        keep = self.touched
+        stale = [k for (k,) in self.db.execute("SELECT k FROM kv") if k not in keep]
+        self.db.executemany("DELETE FROM kv WHERE k=?", [(k,) for k in stale])
+        self.db.commit()
+        self.db.execute("VACUUM")
+        return len(stale)
 
     def close(self) -> None:
         self.flush()

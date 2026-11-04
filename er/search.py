@@ -74,7 +74,8 @@ class Search:
         out = await self.c.call("serper", body, lambda cl: cl.post(
             SERPER_URL, headers={"X-API-KEY": self.s.serper_key, "Content-Type": "application/json"}, json=body), parse)
         if out is None:
-            return None
+            # some plans reject certain operator patterns (HTTP 400); a plain-words query is always accepted
+            return await self.google(q.replace('"', ""), num) if '"' in q else None
         ev = Evidence(hits=[Hit(o["title"], o["link"], o["snippet"], q) for o in out["organic"] if o.get("link")])
         ev.kg_website, ev.kg_title, ev.kg_desc = out["kg"]["website"], out["kg"]["title"], out["kg"]["description"]
         return ev

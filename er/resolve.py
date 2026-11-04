@@ -10,8 +10,16 @@ from rapidfuzz import fuzz
 from . import prompts as P
 from .llm import LLM
 from .model import Cand, Row
-from .normalize import canon_domain, compact_key, group_ids, name_key, person_key
+from .normalize import canon_domain, compact_key, fold, group_ids, name_key, name_tokens, person_key
 from .search import Search, render_hits
+
+
+def render_sites(row: Row) -> str:
+    if not row.sites:
+        return ""
+    lines = [f"- {d} ({p['source']}): final host {p.get('final_host', '')}; title \"{p.get('title', '')[:120]}\"; "
+             f"{p.get('description', '')[:160]}" for d, p in row.sites.items()]
+    return "\n\nWebsites fetched for the input (check the title fits the input before trusting a site):\n" + "\n".join(lines)
 
 STOP = {"a", "an", "the", "and", "of", "for", "with", "that", "which", "is", "its", "in", "on", "to", "by", "from",
         "whose", "company", "platform", "startup", "firm", "provider", "based", "developing", "builds", "offers"}
@@ -40,16 +48,69 @@ async def person_context(llm: LLM, row: Row) -> None:
     row.context = out or {}
 
 
+GENERIC_TOKENS = {"capital", "ventures", "venture", "partners", "partner", "group", "holdings", "holding", "the",
+                  "fund", "funds", "management", "investments", "investment", "labs", "lab", "technologies",
+                  "technology", "tech", "global", "international", "company", "and", "of", "inc", "ltd", "llc", "co",
+                  "vc", "ai", "io", "app", "hq", "bio", "health", "solutions", "systems", "services"}
+
+
+def distinctive_tokens(names: list[str]) -> set[str]:
+    return {t for n in names for t in name_tokens(n) if t not in GENERIC_TOKENS and len(t) >= 3}
+
+
+def page_names_entity(page: dict, names: list[str]) -> bool:
+    hay = re.sub(r"[^a-z0-9]", "", fold(" ".join([page.get("final_host", ""), page.get("title", ""),
+                                                   page.get("description", "")[:200]])))
+    toks = distinctive_tokens(names) or {compact_key(n) for n in names if compact_key(n)}
+    return any(t in hay for t in toks) or any(compact_key(n) and compact_key(n) in hay for n in names)
+
+
+async def check_sites(search: Search, row: Row, domains: list[tuple[str, str]], limit: int = 5) -> None:
+    """Fetch candidate homepages (plain HTTP, the entity's own site) and record whether they name the entity."""
+    todo, seen = [], set(row.sites)
+    for d, src in domains:
+        d = canon_domain(d)
+        if d and d not in seen:
+            seen.add(d)
+            todo.append((d, src))
+    todo = todo[:limit]
+    pages = await asyncio.gather(*(search.homepage(d) for d, _ in todo))
+    for (d, src), page in zip(todo, pages):
+        if page:
+            row.sites[d] = {**page, "source": src, "name_match": page_names_entity(page, row.all_names)}
+
+
+def result_domains(row: Row, limit: int = 3) -> list[tuple[str, str]]:
+    out = []
+    if row.evidence.kg_website:
+        out.append((row.evidence.kg_website, "Google knowledge panel"))
+    for pos, h in enumerate(row.evidence.hits, 1):
+        if canon_domain(h.link) and "site:" not in h.query:
+            out.append((h.link, f"search result #{pos}"))
+    return out[:limit + 1]
+
+
+async def org_profile(llm: LLM, row: Row) -> None:
+    out = await llm.json(P.ORG_PROFILE_SYSTEM, f"name: {row.name}\ndescription: {row.text}",
+                         P.ORG_PROFILE_SCHEMA, "org_profile")
+    row.profile = out or {}
+
+
 async def gather_evidence(search: Search, llm: LLM, row: Row) -> None:
     if row.entity == "people":
         await person_context(llm, row)
         ev = await search.google(person_query(row))
         if ev is not None and not ev.hits and row.org_hint:
             ev = await search.google(f'"{row.name}"')
-    else:
-        ev = await search.google(org_query(row))
+        if ev:
+            row.evidence.extend(ev)
+        return
+    await org_profile(llm, row)
+    ev = await search.google(row.profile.get("search_query") or org_query(row))
     if ev:
         row.evidence.extend(ev)
+    guesses = [(d, "model's guess (unverified)") for d in row.profile.get("official_domains", [])[:3]]
+    await check_sites(search, row, guesses + result_domains(row))
 
 
 # ---------------------------------------------------------------------------- matching
@@ -105,7 +166,7 @@ async def adjudicate(llm: LLM, row: Row) -> None:
         row.match_id, row.confidence, row.decided_by, row.reason = "NEW", 0.9, "rule:no-candidates", ""
         return
     system = P.MATCH_ORG_SYSTEM if row.entity == "organizations" else P.MATCH_PERSON_SYSTEM
-    user = (f"{render_input(row)}\n\nWeb search results for the input:\n{render_hits(row.evidence)}\n\n"
+    user = (f"{render_input(row)}\n\nWeb search results for the input:\n{render_hits(row.evidence)}{render_sites(row)}\n\n"
             f"CANDIDATES from the database:\n{render_cands(row.cands)}\n\n"
             "Answer with the matching candidate id, or NEW.")
     by_id = {c.id: c for c in row.cands}

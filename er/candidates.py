@@ -100,11 +100,39 @@ class Blocker:
                 if sims[i] >= 0.42:
                     add(int(i), float(sims[i]), f"description similarity {sims[i]:.2f}")
 
+        # aliases the profile step recalled (former / current names)
+        for alias in row.all_names[1:]:
+            ak, ack = name_key(alias), compact_key(alias)
+            for i in range(len(self.db)):
+                if ak and (ak == self.keys[i] or ack == self.compact[i] or ack in {s.replace(" ", "") for s in self.slugs[i]}):
+                    add(i, 0.9, f"the input is also known as '{alias}' (model recall), which is this record's name/slug")
+
         for pos, url in enumerate(row.evidence.urls()[:10], 1):
             for f in link_fields(self.entity):
                 for db_id in self.index.lookup(f, url):
                     add(db_id, 1.0 - pos * 0.02, f"web result #{pos} for the input is this record's {f} ({url})",
                         hard=True)
+
+        # fetched homepages: their host and their own social links
+        for d, page in row.sites.items():
+            urls = [("domain", page.get("final_host") or d), ("domain", d)] + [
+                (f, u) for u in page.get("links", []) for f in ("linkedin", "crunchbase", "x")]
+            for f, u in urls:
+                for db_id in self.index.lookup(f, u):
+                    trusted = page.get("name_match") and not page["source"].startswith("model")
+                    add(db_id, 0.95, f"the input's fetched website {d} ({page['source']}; title "
+                                     f"\"{page.get('title', '')[:80]}\") {'is' if f == 'domain' else 'links to'} this "
+                                     f"record's {f}", hard=bool(trusted))
+
+        # conflict: the input's verified website differs from a same-name candidate's website
+        own = {page.get("final_host") or d for d, page in row.sites.items() if page.get("name_match")} | set(row.sites)
+        verified = [d for d, p in row.sites.items() if p.get("name_match") and not p["source"].startswith("model")]
+        for c in found.values():
+            cd = (c.links.get("domain") or "").lower()
+            if verified and cd and not c.hard_key and not any(
+                    cd == o or o.endswith("." + cd) or cd.split(".")[0] == o.split(".")[0] for o in own):
+                c.signals.append(f"CONFLICT: the input's own website appears to be {verified[0]}, "
+                                 f"while this record's website is {cd}")
 
         ranked = sorted(found.values(), key=lambda c: (-c.hard_key, -c.score))
         return ranked[:cap]

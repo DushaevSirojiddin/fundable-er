@@ -27,6 +27,7 @@ class Settings:
     deadline_s: float = 540.0                   # soft deadline; the README limit is 600 s
     escalate_below: float = 0.7
     link_threshold: float = 0.6                 # emit a link only if the picker's confidence >= this
+    x_search_threshold: float = 0.95            # stricter bar for X handles found only via search
     cache_path: Path = ROOT / "cache" / "cache.sqlite"
     conc_llm: int = 16
     conc_search: int = 8
@@ -51,6 +52,7 @@ class Settings:
         s.deadline_s = _f("DEADLINE_SECONDS", s.deadline_s)
         s.link_threshold = _f("LINK_THRESHOLD", s.link_threshold)
         s.fault_rate = _f("FAULT_RATE", 0.0)
+        s.x_search_threshold = _f("X_SEARCH_THRESHOLD", s.x_search_threshold)
         if os.environ.get("CACHE_PATH"):
             s.cache_path = Path(os.environ["CACHE_PATH"])
         return s

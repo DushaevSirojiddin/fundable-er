@@ -26,6 +26,11 @@ def test_compact_key_and_person_key():
 def test_url_canonicalizers():
     assert canon_domain("https://www.Example.com/about?x=1") == "example.com"
     assert canon_domain("https://www.linkedin.com/company/x") == ""
+    assert canon_domain("https://investor.acme.io/news") == "acme.io"
+    assert canon_domain("https://en.example.co.uk/") == "example.co.uk"
+    assert canon_domain("lifesciences.bigco.com") == "lifesciences.bigco.com"
+    assert canon_domain("https://uk.co.uk") == "uk.co.uk"
+    assert canon_linkedin("https://www.linkedin.com/company/43207463", "company") == ""
     assert canon_linkedin("https://uk.linkedin.com/company/acme-inc/about/", "company") == \
         "https://www.linkedin.com/company/acme-inc"
     assert canon_linkedin("https://www.linkedin.com/in/jane-doe-123?trk=x", "in") == "https://www.linkedin.com/in/jane-doe-123"

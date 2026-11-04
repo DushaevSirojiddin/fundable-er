@@ -111,14 +111,26 @@ def host_of(url: str) -> str:
     return h[4:] if h.startswith("www.") else h
 
 
+# Subdomains that are a section of the main site, not a separate entity's site (unlike e.g. lifesciences.danaher.com)
+FUNCTIONAL_SUBDOMAINS = {
+    "investor", "investors", "ir", "about", "blog", "app", "apps", "en", "us", "uk", "eu", "de", "fr", "es", "it",
+    "m", "careers", "jobs", "news", "newsroom", "press", "help", "support", "docs", "developer", "developers", "go",
+    "get", "info", "web", "home", "corporate", "corp", "global", "mail", "portal", "login", "my", "status", "www2",
+}
+
+
 def canon_domain(url: str) -> str:
-    """Bare host (no scheme/www/path); '' for aggregator or social hosts."""
+    """Bare host (no scheme/www/path/functional subdomain); '' for aggregator or social hosts."""
     h = host_of(url)
     if not h or "." not in h:
         return ""
     if any(h == d or h.endswith("." + d) for d in AGGREGATOR_DOMAINS):
         return ""
-    return h
+    labels = h.split(".")
+    while len(labels) > 2 and labels[0] in FUNCTIONAL_SUBDOMAINS and not (
+            len(labels) == 3 and len(labels[-2]) <= 3 and labels[-2] in {"co", "com", "net", "org", "ac", "gov", "or", "ne"}):
+        labels = labels[1:]
+    return ".".join(labels)
 
 
 def _path(url: str) -> tuple[str, str]:
@@ -137,7 +149,9 @@ def canon_linkedin(url: str, kind: str) -> str:
     if not m:
         return ""
     slug = m.group(1).strip()
-    return f"https://www.linkedin.com/{kind}/{slug}" if slug else ""
+    if not slug or slug.isdigit():          # numeric ids are not the canonical vanity URL
+        return ""
+    return f"https://www.linkedin.com/{kind}/{slug}"
 
 
 def canon_crunchbase(url: str, kind: str) -> str:

@@ -137,7 +137,7 @@ async def main_async(args) -> int:
                            "confidence": round(r.confidence, 3), "decided_by": r.decided_by,
                            "current_name": r.current_name, "reason": r.reason,
                            "candidates": [c.id for c in r.cands], "links": r.links,
-                           "link_confidence": r.link_conf} for r in rows],
+                           "link_confidence": r.link_conf, "link_options": r.link_options} for r in rows],
         }
 
     try:
@@ -145,6 +145,8 @@ async def main_async(args) -> int:
     finally:
         await caller.aclose()
         if cache:
+            if args.prune_cache:
+                log(s, f"pruned {cache.prune()} stale cache entries")
             cache.close()
     report["seconds_total"] = round(s.elapsed(), 1)
     report["spend"] = caller.ledger.as_dict()
@@ -164,6 +166,7 @@ def main() -> int:
     ap.add_argument("--types", nargs="+", default=TYPES, choices=TYPES)
     ap.add_argument("--no-cache", action="store_true", help="ignore and do not write the response cache")
     ap.add_argument("--deadline", type=float, help="soft deadline in seconds (default 540)")
+    ap.add_argument("--prune-cache", action="store_true", help="drop cache entries this run did not use")
     return asyncio.run(main_async(ap.parse_args()))
 
 

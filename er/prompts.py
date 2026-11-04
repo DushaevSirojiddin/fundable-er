@@ -20,7 +20,7 @@ Same organization:
 - the same organization after a rename, rebrand or spin-out that kept the business: the database stores the CURRENT name, the input may use a former one (e.g. an old corporate name, an old regional brand of a fund that now operates under a new name).
 
 Different organizations (answer NEW unless another candidate fits):
-- unrelated organizations that share or resemble a name (very common: "Blue", "Parallel", "Key", "Paradigm" are many different companies);
+- unrelated organizations that share or resemble a name (very common: short or generic names such as "Apex", "Nova" or "Summit" belong to many different companies);
 - parent vs subsidiary, sister companies under one group, a holding vs an operating company, an acquirer vs a company it bought that kept operating as its own brand.
 
 - two organizations doing similar things (same niche, same sector, same kind of fund) under different names: they are competitors, not one organization.
@@ -29,6 +29,7 @@ How to decide: compare what the organization does, its sector, customers, geogra
 - A matching name alone is never enough: check that the businesses agree. A vague candidate description that merely does not contradict the input is weak evidence when the name is generic.
 - Match across DIFFERENT names only if you actually know the input name is a former/alternate name of that candidate, or a candidate's profile slug or a web result shows it. Similar descriptions alone never justify it.
 - A candidate's own links are just its record. They count as evidence only when a web result about the INPUT points to the same website/profile; then it is strong evidence, after you check the result really is about the input organization.
+- If the input's own website (a fetched homepage whose title fits the input) is a DIFFERENT site from the candidate's website, they are most likely different organizations that share a name, unless one site redirects to the other or it is clearly a regional site of the same brand. "Websites fetched" may include unverified guesses: trust a site only if its title/description fits the input.
 Set confidence to your honest probability of being right. current_name: the input entity's current official name (its own brand, not a parent's)."""
 
 MATCH_PERSON_SYSTEM = """You resolve person records for a venture-data database.
@@ -39,6 +40,27 @@ Decide whether the INPUT is the same human as exactly one candidate, or NEW (not
 - People change jobs: a different current employer does NOT rule out a match if web results show the person moved there (e.g. a founder whose startup was acquired, an investor who changed funds).
 - If the candidate works in an unrelated field/location and nothing links them to the article's organization, answer NEW.
 Set confidence to your honest probability of being right. current_name: the person's full name as commonly written."""
+
+ORG_PROFILE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "current_name": {"type": "string"},
+        "other_names": {"type": "array", "items": {"type": "string"},
+                        "description": "former or alternate names you actually know; may be empty"},
+        "official_domains": {"type": "array", "items": {"type": "string"},
+                             "description": "the entity's own website domain(s) if you know them; may be empty"},
+        "search_query": {"type": "string"},
+    },
+    "required": ["current_name", "other_names", "official_domains", "search_query"],
+    "additionalProperties": False,
+}
+
+ORG_PROFILE_SYSTEM = """You help look up ONE organization (startup, company or investor) described by a name and a short description.
+Return:
+- current_name: its current official/brand name (it may have been renamed; keep the input name if unsure);
+- other_names: former or alternate names you actually know for THIS organization (not parents, not namesakes); empty if none;
+- official_domains: its own website domain(s), e.g. "example.com", only if you are fairly sure they belong to THIS organization and not a namesake; at most 3; empty if unsure. They will be verified by fetching the site;
+- search_query: a short Google query (3-7 words) that finds this organization's official website and not namesakes: its name plus one or two distinguishing words (sector, city or country)."""
 
 PERSON_CONTEXT_SCHEMA = {
     "type": "object",
