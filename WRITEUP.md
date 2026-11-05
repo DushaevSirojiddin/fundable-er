@@ -5,7 +5,7 @@ author: "Siroj Dushaev · November 2026"
 
 # 1. What I built
 
-**Result on the visible set: 95.5 %** (organizations 97.1 %, people 92.4 %). 159 of 160 match/dedupe decisions are right, and links are 96–100 % precise. I also ran a cold-cache copy of the input with new ids, shuffled rows and 10 % of API calls failing on purpose. It scored 96.3 % in 169 s for $0.24 plus 559 Serper queries. A rerun from the shipped cache takes 33 s and costs $0.
+**Result on the visible set: 95.5 %** (organizations 97.1 %, people 92.4 %). 159 of 160 match/dedupe decisions are right, and links are 96–100 % precise. I also ran a cold-cache copy of the input with new ids, shuffled rows and 10 % of API calls failing on purpose. It scored 95.6 % in 172 s for $0.25 plus 559 Serper queries, with all 160 decisions right; earlier cold runs scored 93.8–96.3 %. A rerun from the shipped cache makes no live calls, takes under a second and costs $0.
 
 ```
 solve.py                uv run solve.py --db DIR --input DIR --out DIR   (writes submission_*.csv + run_report.json)
@@ -30,7 +30,7 @@ scripts/holdout_sim.py  rebuilds the visible set with new ids and shuffled rows 
     - **hard keys**: a URL in the input's evidence that equals a DB record's domain, LinkedIn, Crunchbase or X.
 
     A **conflict** signal is added when the input's verified website differs from a same-name candidate's.
-3. **Adjudication.** `gpt-5.6-luna` (low reasoning effort) sees the input, its evidence and up to 8 candidates with their signals. It returns `{match_id | NEW, confidence, reason}` under a strict JSON schema, and any id not in the candidate list is rejected. `gpt-5.4` re-checks three cases: confidence below 0.7, a match across unrelated names with no hard key (a likely competitor), and NEW despite a same-name candidate (a likely namesake).
+3. **Adjudication.** `gpt-5.6-luna` (low reasoning effort) sees the input, its evidence and up to 8 candidates with their signals. It returns `{match_id | NEW, confidence, reason}` under a strict JSON schema, and any id not in the candidate list is rejected. `gpt-5.4` re-checks four cases: confidence below 0.7; a match across unrelated names with no hard key (a likely competitor); a match whose website differs from a fetched site that names the input (a likely namesake), where it also gets the candidate's homepage to compare; and NEW despite a same-name candidate (a possible missed match).
 4. **Dedupe.** Candidate pairs come from name keys, fuzzy names, embeddings or a shared website. The LLM confirms each pair, then union-find builds the groups. A twin of a matched row takes that row's match; a NEW group points `dup_of` at its first row.
 5. **Links,** found once per NEW group. Three kinds of evidence go in:
     - name queries per site;
@@ -46,8 +46,9 @@ scripts/holdout_sim.py  rebuilds the visible set with new ids and shuffled rows 
 - Timeouts, 408, 429 and 5xx are retried with exponential backoff and jitter, and `Retry-After` is honored. Other 4xx errors fail fast. Serper query patterns that a plan rejects are retried without quotes.
 - A soft deadline at 540 s stops retries so the run finishes with what it has.
 - A failed call degrades only its own row: a rules fallback for the decision, or a blank link. A crash still writes valid CSVs.
+- Homepage fetches that fail for good are cached as failures too, so a rerun from the cache sees the same evidence and reproduces the same output.
 
-Spend comes from `usage.cost` and is capped by `LLM_BUDGET_USD`. Total development spend was $0.93 of $20 and about 1,300 Serper queries.
+Spend comes from `usage.cost` and is capped by `LLM_BUDGET_USD`. Total development spend was $1.50 of $20 and about 2,400 Serper queries.
 
 **Remaining errors (visible set):**
 
@@ -67,7 +68,7 @@ Spend comes from `usage.cost` and is capped by `LLM_BUDGET_USD`. Total developme
 | L0 | Unique indexes on normalized domain / LinkedIn / Crunchbase / X, plus `entity_alias` (former names, slugs, reviewer-confirmed aliases) | ~ms, $0. Most repeat mentions stop here |
 | L1 | Blocking: pg_trgm on names + pgvector ANN on description embeddings, top-k ≤ 8 | ~20 ms |
 | L2 | Cheap LLM with search evidence, only when L0/L1 are inconclusive | ~2–4 s, about $1.6 per 1k rows including links |
-| L3 | Strong model for the risky cases (cross-name match, same-name NEW, low confidence) | ~10 % of L2 traffic |
+| L3 | Strong model for the risky cases (cross-name match, website conflict, same-name NEW, low confidence) | ~10 % of L2 traffic |
 | L4 | Human review | uncertain band only |
 
 In a stream, dedupe is matching against **provisional entities**. A NEW decision creates the entity at once, under an advisory lock on its blocking key so two workers can't create the same company at the same moment. Its twin then matches it through L0/L1 with no separate dedupe step. A nightly batch pass re-pairs the day's provisional entities to catch twins that arrived with no shared key.

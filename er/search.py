@@ -99,7 +99,7 @@ class Search:
                     "description": unescape(desc.group(1).strip())[:300] if desc else "", "links": links[:40]}
 
         return await self.c.call("fetch", req, lambda cl: cl.get(req["url"], headers={"User-Agent": UA}, timeout=12.0),
-                                 parse, max_attempts=2)
+                                 parse, max_attempts=2, cache_failures=True)
 
 
 def render_hits(ev: Evidence | None, limit: int = 8, snippet_len: int = 220) -> str:

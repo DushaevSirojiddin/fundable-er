@@ -14,12 +14,12 @@ python3 case-study/grade.py submissions
 
 - `--db` is a folder with `existing_{organizations,people}.csv`, and `--input` is a folder with `input_{organizations,people}.csv`. The solver reads nothing else; in particular it never reads the answer key.
 - Output: `submission_organizations.csv`, `submission_people.csv` and `run_report.json`. The report holds every decision with its confidence, reason, candidates and link options, plus timings, cache hits, retries, failures and spend.
-- `cache/cache.sqlite` holds every search, LLM and fetch response behind the shipped submission. With it, the visible set reruns in about 35 s at $0 and reproduces the CSVs exactly. On new input (the holdout) the cache misses and calls go live.
+- `cache/cache.sqlite` holds every search, LLM and fetch response behind the shipped submission, including homepage fetches that failed for good. With it, the visible set reruns in under a second at $0, makes no live calls and reproduces the CSVs exactly. On new input (the holdout) the cache misses and calls go live.
 
 | Run | Time | OpenRouter | Serper queries |
 |---|---|---|---|
-| Visible set, shipped cache | ~35 s | $0 | 0 |
-| Cold cache, 160 rows | ~170 s | ~$0.26 | ~560 |
+| Visible set, shipped cache | < 1 s | $0 | 0 |
+| Cold cache, 160 rows | ~170 s | ~$0.25 | ~560 |
 
 The limit is 10 minutes. A soft deadline at 540 s makes the run finish with what it has, and it always writes valid CSVs.
 
@@ -31,7 +31,9 @@ The limit is 10 minutes. A soft deadline at 540 s makes the run finish with what
 | people | 92.4 % | 52/53 | LinkedIn 100/96, Crunchbase 100/93, X 100/73 |
 | **overall** | **95.5 %** | 159/160 | |
 
-**Holdout simulation.** `scripts/holdout_sim.py` builds a copy of the input with new ids and shuffled rows. A run on it with an empty cache and 10 % of API calls failing on purpose (`FAULT_RATE=0.1`) scored 96.3 % in 169 s. Every injected failure was recovered by retry. LLM output is not fully deterministic, so a cold run can differ from the cached submission by one or two rows.
+**Holdout simulation.** `scripts/holdout_sim.py` builds a copy of the input with new ids and shuffled rows. A run of the final code on it with an empty cache and 10 % of API calls failing on purpose (`FAULT_RATE=0.1`) scored **95.6 %** (organizations 95.6 %, people 95.7 %, 160/160 decisions) in 172 s for $0.25 and 559 Serper queries. Every injected OpenRouter and Serper failure was recovered by retry.
+
+LLM output is not fully deterministic, so cold runs vary by a row or two. Earlier cold runs scored 96.3 % and 93.8 %. The 93.8 % run merged a same-name investor with a different firm. That led to the last escalation rule below. Replaying that run's evidence with the rule scored 95.1 %.
 
 ```bash
 python3 scripts/holdout_sim.py case-study scratch/holdout_sim
@@ -55,8 +57,8 @@ python3 case-study/grade.py scratch/hs_out --key scratch/holdout_sim --holdout
 
 ## Spend
 
-- **Development, total:** $0.93 of the $20 OpenRouter budget and about 1,300 Serper queries.
-- **One cold run of 160 rows:** about $0.26 and 560 queries.
+- **Development, total:** $1.50 of the $20 OpenRouter budget and about 2,400 Serper queries.
+- **One cold run of 160 rows:** about $0.25 and 560 queries.
 - Spend is tracked from OpenRouter's `usage.cost` and written to `run_report.json`.
 
 ## Layout

@@ -69,7 +69,7 @@ async def resolve_type(entity: str, db: list[dict], inputs: list[dict], llm: LLM
         r.cands = blocker.candidates(r, in_emb[i] if in_emb is not None else None)
 
     # 3. adjudication
-    await gather_limited([adjudicate(llm, r) for r in rows], s)
+    await gather_limited([adjudicate(llm, r, search) for r in rows], s)
     for r in rows:
         if not r.match_id:
             fallback_decision(r)

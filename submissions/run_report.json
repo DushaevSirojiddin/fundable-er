@@ -8,7 +8,7 @@
   },
   "types": {
     "people": {
-      "seconds": 0.1,
+      "seconds": 0.4,
       "rows": 53,
       "matched": 26,
       "new": 27,
@@ -1498,13 +1498,13 @@
       ]
     },
     "organizations": {
-      "seconds": 65.5,
+      "seconds": 0.5,
       "rows": 107,
       "matched": 58,
       "new": 49,
       "decided_by": {
-        "llm:fast": 96,
-        "llm:strong": 6,
+        "llm:fast": 95,
+        "llm:strong": 7,
         "rule:no-candidates": 5
       },
       "dedupe_pairs": [
@@ -1894,7 +1894,7 @@
           "confidence": 0.99,
           "decided_by": "llm:fast",
           "current_name": "Revere Partners",
-          "reason": "Revere Partners is a specialized oral and dental health venture fund, while none of the candidates is the same organization. The closest healthcare candidate, Kaiser Permanente Ventures, is a separate corporate venture fund, and the other candidates focus on unrelated sectors. Search results provide no evidence of a matching Revere Partners website or alternate name.",
+          "reason": "Revere Partners is a specialized oral and dental health venture capital fund founded by Jeremy Krell and David Arena. None of the candidates is an identified alternate name or matching organization; the closest healthcare investor, Kaiser Permanente Ventures, is a distinct strategic venture fund. The web results also provide no evidence linking Revere Partners to any candidate.",
           "candidates": [
             "org_0099",
             "org_0404",
@@ -1915,9 +1915,9 @@
           },
           "link_options": {
             "domain": [
+              "partnerscoffee.com",
               "nato.int",
               "partnersfcu.org",
-              "partnerscoffee.com",
               "weforum.org",
               "partnersrealestate.com",
               "nga.org",
@@ -1927,6 +1927,7 @@
               "schoolmealscoalition.org"
             ],
             "linkedin": [
+              "https://www.linkedin.com/company/partnerscoffee",
               "https://www.linkedin.com/company/nato",
               "https://www.linkedin.com/company/partners-federal-credit-union",
               "https://www.linkedin.com/company/revere-partners",
@@ -1935,8 +1936,7 @@
               "https://www.linkedin.com/company/revere-capital",
               "https://www.linkedin.com/company/revere-capital-advisors",
               "https://www.linkedin.com/company/summitreverecapital",
-              "https://www.linkedin.com/company/reverepayments",
-              "https://www.linkedin.com/company/revere-housing"
+              "https://www.linkedin.com/company/reverepayments"
             ],
             "crunchbase": [
               "https://www.crunchbase.com/organization/revere-partners",
@@ -2054,7 +2054,7 @@
           "confidence": 0.99,
           "decided_by": "llm:fast",
           "current_name": "Featherlite",
-          "reason": "The input describes the Indian office and education furniture company founded in 1965, and its official website and LinkedIn match the candidate's links and business description.",
+          "reason": "The input matches Featherlite Office Systems: the same Indian furniture company founded in 1965, with matching official website and LinkedIn profiles, product focus, and geography.",
           "candidates": [
             "org_0293"
           ],
@@ -3922,10 +3922,10 @@
           "name": "Dalia",
           "match_id": "org_0331",
           "dup_of": "",
-          "confidence": 0.98,
-          "decided_by": "llm:fast",
+          "confidence": 0.95,
+          "decided_by": "llm:strong",
           "current_name": "Latana",
-          "reason": "The input describes Dalia Research’s distinctive mobile-ad micro-survey and market/opinion data platform. The candidate has the same business description and links to Latana, indicating Dalia was rebranded or renamed Latana. The unrelated fetched websites do not outweigh the strong identity match.",
+          "reason": "The input matches Dalia Research, which is the same organization now branded as Latana. Evidence: the web result explicitly ties 'Dalia Research' to Latana, and the descriptions align closely on ad-based sampling/mobile micro-surveys, non-incentivised surveys, and global brand-tracking/consumer insights. The apparent directionsgroup.com website conflict is not credible because that fetched page is just a generic market-research article, not the input company's homepage.",
           "candidates": [
             "org_0331",
             "org_0158",
@@ -5514,7 +5514,7 @@
           "confidence": 0.99,
           "decided_by": "llm:fast",
           "current_name": "GEM",
-          "reason": "The input is the GEM whole-food chewable vitamin brand operating at dailygem.com, which exactly matches candidate org_0363's domain, LinkedIn identity, and supplement-product description. The other candidates operate in recruiting, power-grid software, or snacks.",
+          "reason": "The input is the same whole-food chewable vitamin brand operating at dailygem.com. The candidate has the identical domain, matching GEM Vitamins branding, and a closely matching description of organic whole-food daily supplement bites.",
           "candidates": [
             "org_0363",
             "org_0164",
@@ -5895,32 +5895,27 @@
       ]
     }
   },
-  "seconds_total": 65.5,
+  "seconds_total": 0.6,
   "spend": {
-    "calls": {
-      "openrouter": 114,
-      "serper": 33
-    },
+    "calls": {},
     "cache_hits": {
-      "openrouter": 286,
-      "serper": 513,
-      "fetch": 286
+      "openrouter": 401,
+      "serper": 546,
+      "fetch": 370
     },
     "failures": {
-      "fetch:403": 42,
-      "fetch:404": 2,
-      "fetch:401": 1,
-      "fetch": 38
+      "fetch:403:cached": 42,
+      "fetch:404:cached": 2,
+      "fetch:retries-exhausted:cached": 34,
+      "fetch:401:cached": 1
     },
-    "retries": {
-      "fetch": 38
-    },
-    "openrouter_cost_usd_live": 0.12742,
-    "openrouter_cost_usd_if_uncached": 0.26131,
-    "serper_queries_live": 33,
+    "retries": {},
+    "openrouter_cost_usd_live": 0.0,
+    "openrouter_cost_usd_if_uncached": 0.27061,
+    "serper_queries_live": 0,
     "tokens": {
-      "prompt": 476319,
-      "completion": 40024
+      "prompt": 478704,
+      "completion": 40645
     }
   }
 }

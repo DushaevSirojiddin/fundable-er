@@ -161,7 +161,19 @@ def fallback_decision(row: Row) -> None:
         row.match_id, row.confidence, row.decided_by = "NEW", 0.5, "rule:no-unique-candidate"
 
 
-async def adjudicate(llm: LLM, row: Row) -> None:
+async def candidate_site(search: Search, c: Cand, row: Row) -> str:
+    """Fetch a candidate's own homepage so the strong model can compare it with the input's site."""
+    cd = canon_domain(c.links.get("domain") or "")
+    if not cd or cd in row.sites:
+        return ""
+    page = await search.homepage(cd)
+    if not page:
+        return f"\n\nWebsite of candidate {c.id} ({cd}): could not be fetched."
+    return (f"\n\nWebsite of candidate {c.id} ({cd}), fetched for comparison: final host {page.get('final_host', '')}; "
+            f"title \"{page.get('title', '')[:120]}\"; {page.get('description', '')[:200]}")
+
+
+async def adjudicate(llm: LLM, row: Row, search: Search | None = None) -> None:
     if not row.cands:
         row.match_id, row.confidence, row.decided_by, row.reason = "NEW", 0.9, "rule:no-candidates", ""
         return
@@ -171,6 +183,8 @@ async def adjudicate(llm: LLM, row: Row) -> None:
             "Answer with the matching candidate id, or NEW.")
     by_id = {c.id: c for c in row.cands}
     for strong in (False, True):
+        if strong and search and row.match_id in by_id and site_conflict(row, by_id[row.match_id]):
+            user += await candidate_site(search, by_id[row.match_id], row)
         out = await llm.json(system, user, P.MATCH_SCHEMA, "match", strong=strong)
         if not out:
             continue
@@ -179,17 +193,43 @@ async def adjudicate(llm: LLM, row: Row) -> None:
         row.match_id, row.confidence = mid, float(out["confidence"])
         row.current_name, row.reason = out["current_name"].strip(), out["reason"]
         row.decided_by = "llm:strong" if strong else "llm:fast"
-        # the two riskiest calls always get a second opinion from the strong model:
-        #  - a match across unrelated names with no hard key (possible competitor merge)
-        #  - NEW although a candidate has the same name (possible missed match)
-        if mid != "NEW":
-            risky = not by_id[mid].hard_key and not name_related(row.name, by_id[mid])
-        else:
-            risky = any(exact_name(row, c) for c in row.cands)
-        if row.confidence >= llm.s.escalate_below and not (risky and not strong):
+        if row.confidence >= llm.s.escalate_below and not (is_risky(row, mid, by_id) and not strong):
             return
     if not row.decided_by:
         fallback_decision(row)
+
+
+def is_risky(row: Row, mid: str, by_id: dict[str, Cand]) -> bool:
+    """The riskiest calls always get a second opinion from the strong model, whatever the fast model's confidence:
+      - a match across unrelated names with no hard key (possible competitor merge);
+      - a match although a homepage fetched for the input names it and is a different website from the candidate's
+        (possible namesake merge);
+      - NEW although a candidate has the same name (possible missed match).
+    """
+    if mid != "NEW":
+        c = by_id[mid]
+        if c.hard_key:
+            return False
+        return (not name_related(row.name, c) or any(s.startswith("CONFLICT") for s in c.signals)
+                or site_conflict(row, c))
+    return any(exact_name(row, c) for c in row.cands)
+
+
+def site_conflict(row: Row, c: Cand) -> bool:
+    """True if some fetched homepage names the input but is not the candidate's website (same site, a subdomain of it,
+    or the same first label on another TLD all count as the candidate's). Unlike the CONFLICT signal shown to the
+    model, this also counts sites the model guessed, since it only decides whether to ask the strong model."""
+    cd = canon_domain(c.links.get("domain") or "")
+    if not cd:
+        return False
+
+    def same(h: str) -> bool:
+        return h == cd or h.endswith("." + cd) or cd.endswith("." + h) or h.split(".")[0] == cd.split(".")[0]
+
+    for d, page in row.sites.items():
+        if page.get("name_match") and not any(same(canon_domain(h) or h) for h in (d, page.get("final_host") or d)):
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------- dedupe

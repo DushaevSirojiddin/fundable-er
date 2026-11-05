@@ -7,6 +7,8 @@ Every external call goes through `Caller.call`, which
      (honouring Retry-After), and stops retrying when the run's deadline is near,
   3. records calls, cache hits, failures and cost in the ledger,
   4. returns None on final failure so one bad call degrades one row instead of stopping the run.
+With `cache_failures=True` (homepage fetches) a final failure is cached too, so a rerun from the cache sees the same
+evidence and reproduces the same output. A failure caused by the run's deadline is never cached.
 """
 from __future__ import annotations
 
@@ -26,6 +28,7 @@ import httpx
 from .config import Settings
 
 RETRY_STATUS = {408, 409, 425, 429, 500, 502, 503, 504, 520, 522, 524, 529}
+FAILED = "__failed__"          # cached marker for a call that failed for good (see cache_failures)
 
 
 class Cache:
@@ -113,11 +116,15 @@ class Caller:
 
     async def call(self, provider: str, request: Any, send: Callable[[httpx.AsyncClient], Awaitable[httpx.Response]],
                    parse: Callable[[httpx.Response], Any], *, max_attempts: int = 5, use_cache: bool = True,
-                   cost_of: Callable[[Any], float] | None = None) -> Any | None:
+                   cost_of: Callable[[Any], float] | None = None, cache_failures: bool = False) -> Any | None:
         """Cached, retried call. `parse` turns a 2xx response into the value that is cached and returned."""
         k = Cache.key(provider, request) if (self.cache and use_cache) else None
         if k:
             hit = self.cache.get(k)
+            if isinstance(hit, dict) and FAILED in hit:
+                self.ledger.cache_hits[provider] += 1
+                self.ledger.failures[f"{provider}:{hit[FAILED]}:cached"] += 1
+                return None
             if hit is not None:
                 self.ledger.cache_hits[provider] += 1
                 if cost_of:
@@ -149,10 +156,16 @@ class Caller:
                     wait = self._retry_after(resp) or self._backoff(attempt)
                 else:                            # 4xx that retrying will not fix (bad key, bad request)
                     self.ledger.failures[f"{provider}:{resp.status_code}"] += 1
+                    if cache_failures and k:
+                        self.cache.put(k, provider, request, {FAILED: resp.status_code})
                     return None
             except (httpx.TimeoutException, httpx.TransportError, json.JSONDecodeError, ValueError, KeyError):
                 wait = self._backoff(attempt)
-            if attempt == max_attempts or self.s.time_left() < wait + 5:
+            if attempt == max_attempts:
+                if cache_failures and k:
+                    self.cache.put(k, provider, request, {FAILED: "retries-exhausted"})
+                break
+            if self.s.time_left() < wait + 5:   # deadline: give up now, but don't cache the failure
                 break
             self.ledger.retries[provider] += 1
             await asyncio.sleep(wait)
